@@ -8,3 +8,4 @@ node_modules/
 .claude/
 .firebase/
 firebase-debug.log
+PROJECT-NOTES.md
