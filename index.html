@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Euchre Trainer</title>
+  <style>
+    :root {
+      --card-w: 100px;
+      --card-h: 122px;
+      --side-card-w: 64px;
+      --side-card-h: 80px;
+      --gold: #d4af37;
+      --felt: #1a4d2e;
+      --felt-deep: #0f3320;
+      --panel-bg: rgba(10, 36, 22, 0.95);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #fff;
+      background: var(--felt-deep) url('assets/Green_felt_tabletop.png') center/cover no-repeat fixed;
+      overflow-x: hidden;
+    }
+
+    #euchre-app {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    #score-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 24px;
+      background: rgba(0, 0, 0, 0.55);
+      border-bottom: 2px solid var(--gold);
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    #score-bar .score-block { display: flex; flex-direction: column; align-items: center; min-width: 90px; }
+    #score-bar .score-label { font-size: 11px; opacity: 0.75; text-transform: uppercase; }
+    #score-bar .score-value { font-size: 26px; color: var(--gold); font-weight: 700; line-height: 1; }
+    #score-bar .center-block { text-align: center; flex: 1; }
+    #score-bar .trump-display { font-size: 22px; }
+    #score-bar .trump-red { color: #ff5252; }
+    #score-bar .trump-black { color: #fff; }
+    #score-bar .dealer-info { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+
+    #game-board {
+      flex: 1;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding: 18px 24px 24px;
+      gap: 14px;
+      min-height: 0;
+    }
+
+    .player-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .player-label {
+      font-size: 13px;
+      opacity: 0.85;
+      margin-bottom: 6px;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+      letter-spacing: 0.5px;
+    }
+    .player-label.is-current {
+      color: var(--gold);
+      font-weight: 700;
+      text-shadow: 0 0 8px rgba(212,175,55,0.55);
+    }
+    .dealer-mark {
+      display: inline-block;
+      background: var(--gold);
+      color: #1a1a1a;
+      padding: 1px 8px;
+      border-radius: 10px;
+      font-weight: 800;
+      margin-left: 6px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    .hint-msg {
+      font-size: 13px;
+      opacity: 0.85;
+      text-align: center;
+      max-width: 460px;
+      line-height: 1.4;
+      margin-top: 2px;
+      font-style: italic;
+    }
+
+    .hand {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+    }
+    .hand.horizontal { flex-direction: row; }
+    .hand.vertical { flex-direction: column; gap: 4px; align-items: center; }
+
+    #middle-row {
+      display: grid;
+      grid-template-columns: minmax(110px, 0.6fr) 2fr minmax(110px, 0.6fr);
+      align-items: center;
+      gap: 18px;
+      min-height: 220px;
+    }
+
+    #table-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      position: relative;
+      min-height: 240px;
+    }
+
+    #status-msg {
+      text-align: center;
+      font-size: 17px;
+      font-weight: 600;
+      text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+      min-height: 22px;
+    }
+
+    .upcard-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .upcard-label {
+      font-size: 11px;
+      letter-spacing: 1px;
+      opacity: 0.85;
+      text-transform: uppercase;
+    }
+
+    .trick-display {
+      position: relative;
+      width: 340px;
+      height: 280px;
+    }
+    .trick-card {
+      position: absolute !important;
+      box-shadow: 2px 4px 10px rgba(0,0,0,0.5);
+    }
+    .trick-south { left: 50%; bottom: 0; transform: translateX(-50%); }
+    .trick-north { left: 50%; top: 0; transform: translateX(-50%); }
+    .trick-west  { left: 0;   top: 50%; transform: translateY(-50%); }
+    .trick-east  { right: 0;  top: 50%; transform: translateY(-50%); }
+
+    .trick-count {
+      font-size: 13px;
+      opacity: 0.9;
+      letter-spacing: 0.5px;
+    }
+    .trick-count .you-tricks { color: var(--gold); }
+
+    .card {
+      width: var(--card-w);
+      height: var(--card-h);
+      border-radius: 7px;
+      background: #fff;
+      box-shadow: 2px 3px 8px rgba(0,0,0,0.45);
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+      font-family: "Georgia", "Cambria", "Times New Roman", serif;
+    }
+
+    .card.side {
+      width: var(--side-card-w);
+      height: var(--side-card-h);
+    }
+
+    .card.face-down {
+      background-image: url('assets/Mackinac_Sunrise_PlayingCardImage_back.png');
+      background-size: 100% 100%;
+      background-position: center;
+      border: 3px solid #fff;
+      background-color: #fff;
+    }
+
+    .card.face-down.lateral {
+      width: var(--side-card-h);
+      height: var(--side-card-w);
+    }
+
+    /* CSS-rendered card faces */
+    .card .card-corner {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      line-height: 1;
+      font-weight: 700;
+      user-select: none;
+    }
+    .card .card-corner.tl { top: 5px; left: 7px; }
+    .card .card-corner.br { bottom: 5px; right: 7px; transform: rotate(180deg); }
+    .card .card-corner .rank {
+      font-size: calc(var(--card-w) * 0.21);
+      letter-spacing: -0.03em;
+    }
+    .card .card-corner .suit {
+      font-size: calc(var(--card-w) * 0.18);
+      margin-top: 1px;
+    }
+    .card .card-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: calc(var(--card-w) * 0.62);
+      pointer-events: none;
+      user-select: none;
+      line-height: 1;
+    }
+    .card .card-center.face {
+      font-family: "Georgia", serif;
+      font-style: italic;
+      font-weight: 700;
+      font-size: calc(var(--card-w) * 0.55);
+    }
+    .card .red   { color: #c1212a; }
+    .card .black { color: #1a1a1a; }
+    .card .face-band {
+      position: absolute;
+      top: 0; bottom: 0; left: 22%; right: 22%;
+      border-left: 1px solid rgba(0,0,0,0.07);
+      border-right: 1px solid rgba(0,0,0,0.07);
+      pointer-events: none;
+    }
+
+    #south-hand {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      padding-top: 8px;
+    }
+    #south-hand .card {
+      cursor: default;
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    #south-hand .card.playable { cursor: pointer; }
+    #south-hand .card.playable:hover {
+      transform: translateY(-14px);
+      box-shadow: 4px 8px 14px rgba(0,0,0,0.55);
+    }
+    #south-hand .card.not-legal { opacity: 0.45; cursor: not-allowed; }
+    #south-hand .card.discard-card { cursor: pointer; }
+    #south-hand .card.discard-card:hover {
+      transform: translateY(-10px);
+      box-shadow: 0 0 0 3px var(--gold), 4px 8px 14px rgba(0,0,0,0.55);
+    }
+
+    #south-controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 14px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+      min-height: 50px;
+    }
+
+    .bid-btn, .action-btn {
+      background: var(--felt);
+      color: #fff;
+      border: 2px solid var(--gold);
+      padding: 9px 18px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    .bid-btn:hover, .action-btn:hover { background: #2a6d4e; transform: translateY(-2px); }
+    .bid-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .bid-btn.suit-red { color: #ff5252; }
+    .bid-btn.primary { background: var(--gold); color: #1a1a1a; }
+    .bid-btn.primary:hover { background: #f0c850; }
+
+    .action-btn { background: var(--gold); color: #1a1a1a; padding: 12px 26px; font-size: 17px; font-weight: 700; }
+    .action-btn:hover { background: #f0c850; }
+
+    .alone-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .alone-label input { accent-color: var(--gold); width: 16px; height: 16px; }
+
+    .discard-prompt {
+      text-align: center;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--gold);
+      letter-spacing: 0.5px;
+    }
+
+    .strength-meter {
+      width: 100%;
+      max-width: 520px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 12px;
+      letter-spacing: 0.3px;
+    }
+    .strength-header {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      opacity: 0.78;
+      text-align: center;
+      margin-bottom: 2px;
+    }
+    .strength-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .strength-suit {
+      width: 20px;
+      text-align: center;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .strength-suit.red { color: #ff5a5a; }
+    .strength-suit.black { color: #fff; }
+    .strength-bar {
+      flex: 1;
+      height: 9px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 5px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+    .strength-fill {
+      height: 100%;
+      border-radius: 5px;
+      transition: width 0.25s ease, background 0.25s ease;
+    }
+    .strength-fill::after {
+      /* Dim the area beyond the threshold of 5.0 */
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0;
+      left: 50%;
+      width: 1px;
+      background: rgba(255,255,255,0.3);
+    }
+    .strength-bar { position: relative; }
+    .strength-bar .threshold-mark {
+      position: absolute;
+      top: -2px;
+      bottom: -2px;
+      width: 1px;
+      background: rgba(255, 255, 255, 0.55);
+    }
+    .strength-bar .threshold-mark.t-call { left: 50%; }
+    .strength-bar .threshold-mark.t-loner { left: 90%; }
+    .strength-label {
+      min-width: 110px;
+      text-align: right;
+      font-weight: 600;
+      font-size: 11px;
+    }
+    .strength-legend {
+      font-size: 10px;
+      opacity: 0.65;
+      text-align: center;
+      margin-top: 2px;
+      letter-spacing: 0.4px;
+    }
+
+    .coach-panel {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      background: var(--panel-bg);
+      border-top: 4px solid var(--gold);
+      padding: 22px 32px 26px;
+      transform: translateY(110%);
+      transition: transform 0.42s cubic-bezier(0.25, 0.1, 0.25, 1);
+      z-index: 100;
+      box-shadow: 0 -10px 28px rgba(0,0,0,0.55);
+    }
+    .coach-panel.visible { transform: translateY(0); }
+    .coach-panel.severity-warning { border-top-color: #f0a020; }
+    .coach-panel.severity-danger  { border-top-color: #d83030; }
+    .coach-panel.severity-info    { border-top-color: #4a90e2; }
+
+    #coach-title { font-size: 20px; font-weight: 700; color: var(--gold); margin-bottom: 8px; letter-spacing: 0.5px; }
+    .coach-panel.severity-danger #coach-title { color: #ff7a7a; }
+    .coach-panel.severity-info   #coach-title { color: #87baff; }
+    .coach-panel.severity-warning #coach-title { color: #ffce72; }
+
+    #coach-message { font-size: 15px; line-height: 1.5; margin-bottom: 14px; max-width: 760px; }
+
+    #coach-continue {
+      background: var(--gold);
+      color: #1a1a1a;
+      border: none;
+      padding: 10px 22px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 5px;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+    }
+    #coach-continue:hover { background: #f0c850; }
+
+    /* Footer hint */
+    .footer-hint {
+      text-align: center;
+      font-size: 11px;
+      opacity: 0.55;
+      padding: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    @media (max-width: 720px) {
+      #score-bar { padding: 8px 12px; font-size: 14px; }
+      #game-board { padding: 10px 8px 14px; }
+      .bid-btn { padding: 7px 12px; font-size: 13px; }
+      #middle-row { gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="euchre-app">
+    <div id="score-bar">
+      <div class="score-block">
+        <div class="score-label">Us (N/S)</div>
+        <div class="score-value" id="score-ns">0</div>
+      </div>
+      <div class="center-block">
+        <div class="trump-display" id="trump-display">—</div>
+        <div class="dealer-info" id="dealer-info"></div>
+      </div>
+      <div class="score-block">
+        <div class="score-label">Them (E/W)</div>
+        <div class="score-value" id="score-ew">0</div>
+      </div>
+    </div>
+
+    <div id="game-board">
+      <div class="player-area" id="north-area">
+        <div class="player-label" id="north-label">North (Partner)</div>
+        <div class="hand horizontal" id="north-hand"></div>
+      </div>
+
+      <div id="middle-row">
+        <div class="player-area" id="west-area">
+          <div class="player-label" id="west-label">West</div>
+          <div class="hand vertical" id="west-hand"></div>
+        </div>
+
+        <div id="table-area"></div>
+
+        <div class="player-area" id="east-area">
+          <div class="player-label" id="east-label">East</div>
+          <div class="hand vertical" id="east-hand"></div>
+        </div>
+      </div>
+
+      <div class="player-area" id="south-area">
+        <div class="player-label" id="south-label">You (South)</div>
+        <div id="south-hand"></div>
+        <div id="south-controls"></div>
+      </div>
+    </div>
+
+    <div class="footer-hint">Tap a card to play • Coach pops up to teach better plays</div>
+  </div>
+
+  <div class="coach-panel" id="coach-panel">
+    <div id="coach-title"></div>
+    <div id="coach-message"></div>
+    <button id="coach-continue">Got it</button>
+  </div>
+
+  <script>
+  /* ============================================================
+     CONSTANTS
+     ============================================================ */
+
+  const SUITS = ['S', 'H', 'D', 'C'];
+  const RANKS = ['9', '10', 'J', 'Q', 'K', 'A'];
+  const SUIT_NAME = { S: 'Spades', H: 'Hearts', D: 'Diamonds', C: 'Clubs' };
+  const SUIT_SYMBOL = { S: '♠', H: '♥', D: '♦', C: '♣' };
+  const SAME_COLOR = { S: 'C', C: 'S', H: 'D', D: 'H' };
+  const TEAM_OF = { 0: 'NS', 1: 'EW', 2: 'NS', 3: 'EW' };
+  const PLAYER_NAME = { 0: 'You', 1: 'West', 2: 'North', 3: 'East' };
+
+  // Hand-strength meter helpers.
+  // Score uses EuchreRules.evaluateHandForTrump (right=4, left=3, trump=1, off-ace=0.5).
+  // Thresholds: pass < 4, marginal call 4–5, comfortable 5–8, loner 9+.
+  function strengthBucket(score) {
+    if (score >= 9) return { label: 'Loner-worthy', color: '#d4af37' };
+    if (score >= 6) return { label: 'Strong',       color: '#4caf50' };
+    if (score >= 5) return { label: 'Comfortable',  color: '#9bc53d' };
+    if (score >= 4) return { label: 'Borderline',   color: '#f0a020' };
+    if (score >= 2) return { label: 'Weak',         color: '#e07040' };
+    return                   { label: 'Very weak',  color: '#d83030' };
+  }
+  // Width %: cap at 100%, treat 10 as the max useful score.
+  function strengthPct(score) { return Math.max(0, Math.min(100, score * 10)); }
+
+  // CSS-rendered card faces — corners (rank+suit) plus center suit/face character.
+  // Number cards 9 / 10 show a center suit symbol; A shows a big suit; J/Q/K show
+  // an italic face letter. We keep the Mackinac sunrise art for face-down backs.
+  function cardFaceHTML(suit, rank) {
+    const sym = SUIT_SYMBOL[suit];
+    const colorClass = (suit === 'H' || suit === 'D') ? 'red' : 'black';
+    const isFace = rank === 'J' || rank === 'Q' || rank === 'K';
+    const center = isFace
+      ? `<div class="card-center face ${colorClass}">${rank}</div><div class="face-band"></div>`
+      : `<div class="card-center ${colorClass}">${sym}</div>`;
+    const corner = `<div class="rank">${rank}</div><div class="suit">${sym}</div>`;
+    return `<div class="card-corner tl ${colorClass}">${corner}</div>${center}<div class="card-corner br ${colorClass}">${corner}</div>`;
+  }
+
+  /* ============================================================
+     CARD / DECK
+     ============================================================ */
+
+  class Card {
+    constructor(suit, rank) {
+      this.suit = suit;
+      this.rank = rank;
+      this.id = suit + rank;
+    }
+    isRightBower(trump) { return this.rank === 'J' && this.suit === trump; }
+    isLeftBower(trump)  { return this.rank === 'J' && this.suit === SAME_COLOR[trump]; }
+    effectiveSuit(trump) { return this.isLeftBower(trump) ? trump : this.suit; }
+    isTrump(trump) { return this.effectiveSuit(trump) === trump; }
+    suitSymbol() { return SUIT_SYMBOL[this.suit]; }
+    suitColor() { return (this.suit === 'H' || this.suit === 'D') ? 'red' : 'black'; }
+    label() { return `${this.rank}${SUIT_SYMBOL[this.suit]}`; }
+    faceHTML() { return cardFaceHTML(this.suit, this.rank); }
+  }
+
+  class Deck {
+    constructor() {
+      this.cards = [];
+      for (const s of SUITS) for (const r of RANKS) this.cards.push(new Card(s, r));
+    }
+    shuffle() {
+      for (let i = this.cards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [this.cards[i], this.cards[j]] = [this.cards[j], this.cards[i]];
+      }
+      return this;
+    }
+    dealEuchre() {
+      this.shuffle();
+      const hands = [[], [], [], []];
+      for (let i = 0; i < 20; i++) hands[i % 4].push(this.cards[i]);
+      return { hands, upcard: this.cards[20] };
+    }
+  }
+
+  /* ============================================================
+     RULES (pure)
+     ============================================================ */
+
+  const TRUMP_RANK_NUM = { '9': 1, '10': 2, 'Q': 3, 'K': 4, 'A': 5 };
+  const NONTRUMP_RANK_NUM = { '9': 1, '10': 2, 'J': 3, 'Q': 4, 'K': 5, 'A': 6 };
+
+  class EuchreRules {
+    static trumpStrength(card, trump) {
+      if (card.isRightBower(trump)) return 7;
+      if (card.isLeftBower(trump))  return 6;
+      if (card.isTrump(trump))      return TRUMP_RANK_NUM[card.rank];
+      return 0;
+    }
+    static nonTrumpStrength(card) { return NONTRUMP_RANK_NUM[card.rank]; }
+
+    static beats(challenger, current, ledSuit, trump) {
+      const cT = challenger.isTrump(trump);
+      const wT = current.isTrump(trump);
+      if (cT && !wT) return true;
+      if (!cT && wT) return false;
+      if (cT && wT) return EuchreRules.trumpStrength(challenger, trump) > EuchreRules.trumpStrength(current, trump);
+      const cLed = challenger.effectiveSuit(trump) === ledSuit;
+      const wLed = current.effectiveSuit(trump) === ledSuit;
+      if (cLed && !wLed) return true;
+      if (!cLed && wLed) return false;
+      return EuchreRules.nonTrumpStrength(challenger) > EuchreRules.nonTrumpStrength(current);
+    }
+
+    static trickWinner(trick, ledSuit, trump) {
+      let winner = trick[0];
+      for (let i = 1; i < trick.length; i++) {
+        if (EuchreRules.beats(trick[i].card, winner.card, ledSuit, trump)) winner = trick[i];
+      }
+      return winner.playerIndex;
+    }
+
+    static trickWinnerCard(trick, ledSuit, trump) {
+      let w = trick[0];
+      for (let i = 1; i < trick.length; i++) {
+        if (EuchreRules.beats(trick[i].card, w.card, ledSuit, trump)) w = trick[i];
+      }
+      return w.card;
+    }
+
+    static legalPlays(hand, ledSuit, trump) {
+      if (!ledSuit) return [...hand];
+      const matching = hand.filter(c => c.effectiveSuit(trump) === ledSuit);
+      return matching.length > 0 ? matching : [...hand];
+    }
+
+    static evaluateHandForTrump(hand, trump, isDealer = false, upcardSuit = null) {
+      let s = 0;
+      for (const c of hand) {
+        if (c.isRightBower(trump)) s += 4;
+        else if (c.isLeftBower(trump)) s += 3;
+        else if (c.isTrump(trump)) s += 1;
+        else if (c.rank === 'A') s += 0.5;
+      }
+      if (isDealer && upcardSuit && upcardSuit === trump) s += 1; // dealer gets the upcard as trump
+      return s;
+    }
+
+    static countTrump(hand, trump) {
+      return hand.filter(c => c.isTrump(trump)).length;
+    }
+    static hasRightBower(hand, trump) { return hand.some(c => c.isRightBower(trump)); }
+    static hasLeftBower(hand, trump)  { return hand.some(c => c.isLeftBower(trump)); }
+  }
+
+  /* ============================================================
+     AI (pure)
+     ============================================================ */
+
+  class EuchreAI {
+    static decideBidR1(hand, upcardSuit, playerIndex, dealerIndex, scores) {
+      const isDealer = playerIndex === dealerIndex;
+      const score = EuchreRules.evaluateHandForTrump(hand, upcardSuit, isDealer, upcardSuit);
+      const threshold = isDealer ? 3.5 : 5;
+      if (score >= threshold) return { action: 'ORDER_UP', alone: score >= 9 };
+      return { action: 'PASS', alone: false };
+    }
+
+    static decideBidR2(hand, excludeSuit, playerIndex, dealerIndex, scores) {
+      const isDealer = playerIndex === dealerIndex;
+      const candidates = SUITS.filter(s => s !== excludeSuit);
+      let best = { suit: candidates[0], score: -1 };
+      for (const s of candidates) {
+        const sc = EuchreRules.evaluateHandForTrump(hand, s);
+        if (sc > best.score) best = { suit: s, score: sc };
+      }
+      if (best.score >= 4 || isDealer) {
+        return { action: 'CALL_SUIT', suit: best.suit, alone: best.score >= 9 };
+      }
+      return { action: 'PASS', alone: false };
+    }
+
+    static chooseDiscard(hand, trump) {
+      // Prefer to discard lowest non-trump (singleton if possible to create a void)
+      const nonTrump = hand.filter(c => !c.isTrump(trump));
+      if (nonTrump.length > 0) {
+        const sorted = [...nonTrump].sort((a, b) => EuchreRules.nonTrumpStrength(a) - EuchreRules.nonTrumpStrength(b));
+        return sorted[0];
+      }
+      // All trump — discard lowest non-bower trump
+      const sorted = [...hand].sort((a, b) => EuchreRules.trumpStrength(a, trump) - EuchreRules.trumpStrength(b, trump));
+      return sorted[0];
+    }
+
+    static partnerIsWinning(currentTrick, playerIndex, ledSuit, trump) {
+      if (currentTrick.length === 0) return false;
+      const partner = (playerIndex + 2) % 4;
+      const partnerInTrick = currentTrick.some(p => p.playerIndex === partner);
+      if (!partnerInTrick) return false;
+      return EuchreRules.trickWinner(currentTrick, ledSuit, trump) === partner;
+    }
+
+    static choosePlay(hand, currentTrick, ledSuit, trump, playerIndex, tricksWon, callerTeam) {
+      const legal = EuchreRules.legalPlays(hand, ledSuit, trump);
+
+      const sortLowFirst = (cards) => [...cards].sort((a, b) => {
+        const aT = a.isTrump(trump), bT = b.isTrump(trump);
+        if (aT && bT) return EuchreRules.trumpStrength(a, trump) - EuchreRules.trumpStrength(b, trump);
+        if (aT && !bT) return 1;
+        if (!aT && bT) return -1;
+        return EuchreRules.nonTrumpStrength(a) - EuchreRules.nonTrumpStrength(b);
+      });
+      const sortHighFirst = (cards) => sortLowFirst(cards).reverse();
+
+      // Leading
+      if (currentTrick.length === 0) {
+        const myTeam = TEAM_OF[playerIndex];
+        const weCalled = myTeam === callerTeam;
+        const trumpCards = legal.filter(c => c.isTrump(trump));
+        if (weCalled && trumpCards.length >= 2) {
+          // Lead highest trump (right bower if held)
+          return sortHighFirst(trumpCards)[0];
+        }
+        // Lead highest off-suit
+        const off = legal.filter(c => !c.isTrump(trump));
+        if (off.length > 0) return sortHighFirst(off)[0];
+        return sortHighFirst(legal)[0];
+      }
+
+      // Partner is winning -> play lowest legal
+      if (EuchreAI.partnerIsWinning(currentTrick, playerIndex, ledSuit, trump)) {
+        return sortLowFirst(legal)[0];
+      }
+
+      // Try to beat current winner with the lowest winning card
+      const winnerCard = EuchreRules.trickWinnerCard(currentTrick, ledSuit, trump);
+      const winning = legal.filter(c => EuchreRules.beats(c, winnerCard, ledSuit, trump));
+      if (winning.length > 0) return sortLowFirst(winning)[0];
+
+      // Can't win — dump lowest non-trump, fall back to lowest trump
+      const off = legal.filter(c => !c.isTrump(trump));
+      if (off.length > 0) return sortLowFirst(off)[0];
+      return sortLowFirst(legal)[0];
+    }
+  }
+
+  /* ============================================================
+     COACH
+     ============================================================ */
+
+  class EuchreCoach {
+    static evalBidR1(hand, upcardSuit, action, alone, playerIndex, dealerIndex, scores) {
+      const isDealer = playerIndex === dealerIndex;
+      const score = EuchreRules.evaluateHandForTrump(hand, upcardSuit, isDealer, upcardSuit);
+      const trumpCount = EuchreRules.countTrump(hand, upcardSuit) + (isDealer ? 1 : 0);
+      const myTeam = TEAM_OF[playerIndex];
+      const oppScore = myTeam === 'NS' ? scores.EW : scores.NS;
+
+      if (action === 'PASS') {
+        if (isDealer && hand.some(c => c.rank === 'J' && c.suit === upcardSuit)) {
+          return { title: 'Order Up With the Right Bower', severity: 'warning',
+            message: `As dealer holding the ${SUIT_SYMBOL[upcardSuit]} jack (right bower), you'd be picking it up — that's almost always worth ordering. The right bower locks down at least one trick.` };
+        }
+        if (score >= 5) {
+          return { title: 'Consider Ordering Up', severity: 'warning',
+            message: `Your hand evaluates to ${score.toFixed(1)} for ${SUIT_NAME[upcardSuit]}. With ${trumpCount} trump, ordering up is usually the right call (rule of thumb: ≥ 5 strength as non-dealer).` };
+        }
+      }
+
+      if (action === 'ORDER_UP') {
+        if (trumpCount < 2) {
+          return { title: 'Risky Order — Thin Trump', severity: 'danger',
+            message: `Ordering up with only ${trumpCount} trump is risky. You generally want 3+ trump (counting the upcard if you're dealer) to feel safe — otherwise you risk an euchre.` };
+        }
+        if (oppScore >= 9 && score < 6) {
+          return { title: 'Risky Order — Opponents at 9', severity: 'danger',
+            message: `Opponents only need 1 point to win. With this marginal hand (strength ${score.toFixed(1)}), an euchre hands them the game.` };
+        }
+        if (!alone && score >= 9) {
+          return { title: 'Consider Going Alone', severity: 'info',
+            message: `This hand is loaded (strength ${score.toFixed(1)}). A loner scores 4 instead of 2 — with this many top trump, you have a strong chance at all 5 tricks.` };
+        }
+      }
+      return null;
+    }
+
+    static evalBidR2(hand, calledSuit, action, alone, excludeSuit, playerIndex, dealerIndex) {
+      const candidates = SUITS.filter(s => s !== excludeSuit);
+      let best = { suit: candidates[0], score: -1 };
+      for (const s of candidates) {
+        const sc = EuchreRules.evaluateHandForTrump(hand, s);
+        if (sc > best.score) best = { suit: s, score: sc };
+      }
+
+      if (action === 'PASS') {
+        const isDealer = playerIndex === dealerIndex; // dealer can't pass anyway
+        if (!isDealer && best.score >= 5) {
+          return { title: 'Consider Calling', severity: 'warning',
+            message: `${SUIT_NAME[best.suit]} evaluates to ${best.score.toFixed(1)} — strong enough to call. Don't leave points on the table when you have a clear best suit.` };
+        }
+      }
+
+      if (action === 'CALL_SUIT' && calledSuit) {
+        const trumpCount = EuchreRules.countTrump(hand, calledSuit);
+        const score = EuchreRules.evaluateHandForTrump(hand, calledSuit);
+        if (trumpCount < 2) {
+          return { title: 'Thin Call', severity: 'danger',
+            message: `Calling ${SUIT_NAME[calledSuit]} with only ${trumpCount} trump risks a euchre — opponents score 2.` };
+        }
+        if (calledSuit !== best.suit && Math.abs(score - best.score) >= 1.5) {
+          return { title: 'Better Suit Available', severity: 'warning',
+            message: `${SUIT_NAME[calledSuit]} scored ${score.toFixed(1)} but ${SUIT_NAME[best.suit]} scored ${best.score.toFixed(1)} — the stronger suit is usually the safer call.` };
+        }
+        if (!alone && score >= 9) {
+          return { title: 'Consider Going Alone', severity: 'info',
+            message: `This hand is loaded (strength ${score.toFixed(1)}). A loner scores 4 instead of 2.` };
+        }
+      }
+      return null;
+    }
+
+    static evalCardPlay(handBeforePlay, card, currentTrick, ledSuit, trump, playerIndex, callerTeam, isLoner, lonerCaller) {
+      const myTeam = TEAM_OF[playerIndex];
+      const partnerIdx = (playerIndex + 2) % 4;
+
+      // 1. Over-trumping partner
+      if (currentTrick.length > 0 && EuchreAI.partnerIsWinning(currentTrick, playerIndex, ledSuit, trump)) {
+        if (card.isTrump(trump)) {
+          // Was trumping required? (only if we couldn't follow suit and had no off-suit to dump)
+          const legal = EuchreRules.legalPlays(handBeforePlay, ledSuit, trump);
+          const offSuit = legal.filter(c => !c.isTrump(trump));
+          if (offSuit.length > 0) {
+            return { title: 'Save Your Trump', severity: 'warning',
+              message: `Your partner was already winning this trick. Playing ${card.label()} wastes a valuable trump — dump a low off-suit card instead.` };
+          }
+        } else {
+          // Played highest off-suit when partner was winning — fine. But check if we played our highest unnecessarily
+          const legal = EuchreRules.legalPlays(handBeforePlay, ledSuit, trump);
+          const lowestLegal = [...legal].sort((a, b) => EuchreRules.nonTrumpStrength(a) - EuchreRules.nonTrumpStrength(b))[0];
+          if (!card.isTrump(trump) && legal.length > 1 && card !== lowestLegal && !card.isTrump(trump)) {
+            // Only nudge if a notable difference (don't nag every time)
+            if (EuchreRules.nonTrumpStrength(card) - EuchreRules.nonTrumpStrength(lowestLegal) >= 3) {
+              return { title: 'Throw Off Low', severity: 'info',
+                message: `Partner had the trick — keep your higher cards (${card.label()}) for later and dump your lowest first.` };
+            }
+          }
+        }
+      }
+
+      // Leading-only checks
+      if (currentTrick.length === 0) {
+        const hasRight = EuchreRules.hasRightBower(handBeforePlay, trump);
+        const hasLeft  = EuchreRules.hasLeftBower(handBeforePlay, trump);
+
+        // 2. Both bowers but leading off-suit
+        if (hasRight && hasLeft && !card.isTrump(trump)) {
+          return { title: 'Lead Your Bowers', severity: 'warning',
+            message: `You hold both bowers — leading trump pulls opponents' trump out and locks in tricks. Lead the right bower first.` };
+        }
+
+        // 3. Loner defense — opponents are alone, you have trump but didn't lead it
+        if (isLoner && lonerCaller != null && TEAM_OF[lonerCaller] !== myTeam) {
+          const trumpInHand = handBeforePlay.filter(c => c.isTrump(trump));
+          if (trumpInHand.length > 0 && !card.isTrump(trump)) {
+            return { title: 'Lead Trump vs. Loner', severity: 'warning',
+              message: `Against a loner, lead your highest trump. It's the most reliable way to take a trick and stop the 4-point sweep.` };
+          }
+        }
+
+        // 4. Has right bower, leading trump but not the right bower
+        if (hasRight && card.isTrump(trump) && !card.isRightBower(trump)) {
+          return { title: 'Lead the Right Bower First', severity: 'info',
+            message: `When leading trump, lead the right bower first to draw out opponents' high trump before your weaker trump.` };
+        }
+      }
+
+      // 5. Failing to trump in (mid-trick)
+      if (currentTrick.length > 0 && !EuchreAI.partnerIsWinning(currentTrick, playerIndex, ledSuit, trump)) {
+        const hasTrump = handBeforePlay.some(c => c.isTrump(trump));
+        const couldFollow = handBeforePlay.some(c => c.effectiveSuit(trump) === ledSuit);
+        const weCalled = myTeam === callerTeam;
+        if (!card.isTrump(trump) && hasTrump && !couldFollow && weCalled) {
+          return { title: 'Trump In to Win', severity: 'info',
+            message: `Partner was losing and you couldn't follow suit. Playing trump here would have won the trick for your team.` };
+        }
+      }
+
+      // 6. Played low when a higher legal card would have won.
+      //    Skip entirely if partner is already winning — no need to take the trick from them.
+      if (currentTrick.length > 0 && !EuchreAI.partnerIsWinning(currentTrick, playerIndex, ledSuit, trump)) {
+        const winnerCard = EuchreRules.trickWinnerCard(currentTrick, ledSuit, trump);
+        const wePlayedWins = EuchreRules.beats(card, winnerCard, ledSuit, trump);
+        const isLastSeat = currentTrick.length === (isLoner ? 2 : 3); // we're sealing the trick
+        if (!wePlayedWins) {
+          const legal = EuchreRules.legalPlays(handBeforePlay, ledSuit, trump);
+          const winners = legal.filter(c => EuchreRules.beats(c, winnerCard, ledSuit, trump));
+          if (winners.length > 0) {
+            // Only nudge in last seat (clear miss) or when a non-trump winner was available (cheap takeover)
+            const cheapWinner = winners.find(c => !c.isTrump(trump));
+            if (isLastSeat || cheapWinner) {
+              const best = cheapWinner || winners.sort((a, b) => EuchreRules.trumpStrength(a, trump) - EuchreRules.trumpStrength(b, trump))[0];
+              return { title: 'You Could Have Won That Trick', severity: 'info',
+                message: `You played ${card.label()} but ${best.label()} would have beaten the current winner (${winnerCard.label()}).` };
+            }
+          }
+        }
+      }
+
+      return null;
+    }
+
+    static evalGoAlone(hand, trump, alone) {
+      const score = EuchreRules.evaluateHandForTrump(hand, trump);
+      const trumpCount = EuchreRules.countTrump(hand, trump);
+      if (alone && score < 6) {
+        return { title: 'Risky Loner', severity: 'danger',
+          message: `Going alone with strength ${score.toFixed(1)} and ${trumpCount} trump is dangerous. Need top trump (right + left) and an off-suit ace minimum.` };
+      }
+      return null;
+    }
+  }
+
+  /* ============================================================
+     GAME STATE MACHINE
+     ============================================================ */
+
+  const STATE = {
+    DEALING: 'DEALING',
+    BIDDING_R1: 'BIDDING_R1',
+    BIDDING_R2: 'BIDDING_R2',
+    DEALER_DISCARD: 'DEALER_DISCARD',
+    PLAYING: 'PLAYING',
+    TRICK_END: 'TRICK_END',
+    HAND_SCORING: 'HAND_SCORING',
+    GAME_OVER: 'GAME_OVER',
+  };
+
+  class EuchreGame {
+    constructor() { this.fullReset(); }
+
+    fullReset() {
+      this.scores = { NS: 0, EW: 0 };
+      this.dealer = 0; // human starts as dealer; rotates each hand
+      this.handNumber = 0;
+      this.lastHandResult = null;
+      this.deal();
+    }
+
+    deal() {
+      const deck = new Deck();
+      const r = deck.dealEuchre();
+      this.hands = { 0: r.hands[0], 1: r.hands[1], 2: r.hands[2], 3: r.hands[3] };
+      this.upcard = r.upcard;
+      this.upcardSuit = r.upcard.suit;
+      this.trump = null;
+      this.caller = null;
+      this.callerTeam = null;
+      this.isLoner = false;
+      this.lonerCaller = null;
+      this.lonerPartner = null;
+      this.currentTrick = [];
+      this.ledSuit = null;
+      this.tricksWon = { NS: 0, EW: 0 };
+      this.bidRound = 1;
+      this.currentPlayer = (this.dealer + 1) % 4;
+      this.state = STATE.BIDDING_R1;
+      this.handNumber++;
+      return this;
+    }
+
+    nextHand() {
+      this.dealer = (this.dealer + 1) % 4;
+      this.deal();
+    }
+
+    nextPlayer(from) {
+      let n = (from + 1) % 4;
+      if (this.isLoner && n === this.lonerPartner) n = (n + 1) % 4;
+      return n;
+    }
+
+    isUserTurn() { return this.currentPlayer === 0; }
+
+    /* ---------------- Bidding ---------------- */
+
+    processBid(playerIndex, action, alone = false, calledSuit = null) {
+      if (playerIndex !== this.currentPlayer) return { error: 'Not your turn' };
+
+      if (action === 'ORDER_UP' && this.state === STATE.BIDDING_R1) {
+        this.trump = this.upcardSuit;
+        this.caller = playerIndex;
+        this.callerTeam = TEAM_OF[playerIndex];
+        this.isLoner = !!alone;
+        if (this.isLoner) {
+          this.lonerCaller = playerIndex;
+          this.lonerPartner = (playerIndex + 2) % 4;
+        }
+        // Dealer picks up upcard
+        this.hands[this.dealer].push(this.upcard);
+
+        if (this.dealer === 0) {
+          this.state = STATE.DEALER_DISCARD;
+          this.currentPlayer = 0;
+        } else {
+          const discard = EuchreAI.chooseDiscard(this.hands[this.dealer], this.trump);
+          this.hands[this.dealer] = this.hands[this.dealer].filter(c => c.id !== discard.id);
+          this._beginPlay();
+        }
+        return { ok: true };
+      }
+
+      if (action === 'CALL_SUIT' && this.state === STATE.BIDDING_R2) {
+        if (!calledSuit || calledSuit === this.upcardSuit) return { error: 'Invalid suit' };
+        this.trump = calledSuit;
+        this.caller = playerIndex;
+        this.callerTeam = TEAM_OF[playerIndex];
+        this.isLoner = !!alone;
+        if (this.isLoner) {
+          this.lonerCaller = playerIndex;
+          this.lonerPartner = (playerIndex + 2) % 4;
+        }
+        this._beginPlay();
+        return { ok: true };
+      }
+
+      if (action === 'PASS') {
+        const eldest = (this.dealer + 1) % 4;
+        const next = (playerIndex + 1) % 4;
+        if (this.state === STATE.BIDDING_R1) {
+          if (next === eldest) {
+            // All four passed → round 2
+            this.bidRound = 2;
+            this.currentPlayer = eldest;
+            this.state = STATE.BIDDING_R2;
+          } else {
+            this.currentPlayer = next;
+          }
+          return { ok: true };
+        }
+        if (this.state === STATE.BIDDING_R2) {
+          // Stuck dealer — dealer cannot pass
+          if (playerIndex === this.dealer) return { error: 'Dealer is stuck' };
+          this.currentPlayer = next;
+          return { ok: true };
+        }
+      }
+      return { error: 'Invalid action for state' };
+    }
+
+    dealerDiscard(card) {
+      if (this.state !== STATE.DEALER_DISCARD) return { error: 'Not in discard state' };
+      if (this.currentPlayer !== 0) return { error: 'Not your discard' };
+      this.hands[0] = this.hands[0].filter(c => c.id !== card.id);
+      this._beginPlay();
+      return { ok: true };
+    }
+
+    _beginPlay() {
+      this.state = STATE.PLAYING;
+      let lead = (this.dealer + 1) % 4;
+      if (this.isLoner && lead === this.lonerPartner) lead = (lead + 1) % 4;
+      this.currentPlayer = lead;
+      this.currentTrick = [];
+      this.ledSuit = null;
+    }
+
+    /* ---------------- Card Play ---------------- */
+
+    playCard(playerIndex, card) {
+      if (this.state !== STATE.PLAYING) return { error: 'Not in play state' };
+      if (playerIndex !== this.currentPlayer) return { error: 'Not your turn' };
+
+      const legal = EuchreRules.legalPlays(this.hands[playerIndex], this.ledSuit, this.trump);
+      if (!legal.some(c => c.id === card.id)) return { error: 'Illegal play' };
+
+      // Coach evaluates BEFORE state advances (only for player 0)
+      let coachResult = null;
+      if (playerIndex === 0) {
+        const handBefore = [...this.hands[0]];
+        coachResult = EuchreCoach.evalCardPlay(
+          handBefore, card, this.currentTrick, this.ledSuit,
+          this.trump, playerIndex, this.callerTeam, this.isLoner, this.lonerCaller
+        );
+      }
+
+      if (this.ledSuit === null) this.ledSuit = card.effectiveSuit(this.trump);
+      this.hands[playerIndex] = this.hands[playerIndex].filter(c => c.id !== card.id);
+      this.currentTrick.push({ playerIndex, card });
+
+      const trickSize = this.isLoner ? 3 : 4;
+      if (this.currentTrick.length === trickSize) {
+        const winner = EuchreRules.trickWinner(this.currentTrick, this.ledSuit, this.trump);
+        this.tricksWon[TEAM_OF[winner]]++;
+        this.lastTrickWinner = winner;
+        this.lastTrick = [...this.currentTrick];
+        this.lastLedSuit = this.ledSuit;
+        this.state = STATE.TRICK_END;
+      } else {
+        this.currentPlayer = this.nextPlayer(playerIndex);
+      }
+
+      return { ok: true, coachResult };
+    }
+
+    advanceAfterTrick() {
+      if (this.state !== STATE.TRICK_END) return;
+      const total = this.tricksWon.NS + this.tricksWon.EW;
+      if (total >= 5) return this.scoreHand();
+      this.currentTrick = [];
+      this.ledSuit = null;
+      let lead = this.lastTrickWinner;
+      if (this.isLoner && lead === this.lonerPartner) lead = (lead + 1) % 4;
+      this.currentPlayer = lead;
+      this.state = STATE.PLAYING;
+    }
+
+    scoreHand() {
+      const callerTeam = this.callerTeam;
+      const defenderTeam = callerTeam === 'NS' ? 'EW' : 'NS';
+      const callerTricks = this.tricksWon[callerTeam];
+      const defenderTricks = this.tricksWon[defenderTeam];
+
+      let scoringTeam, points, message;
+      if (defenderTricks >= 3) {
+        scoringTeam = defenderTeam;
+        points = 2;
+        message = `Euchred! ${defenderTeam === 'NS' ? 'Your team' : 'Opponents'} +2.`;
+      } else if (this.isLoner && callerTricks === 5) {
+        scoringTeam = callerTeam;
+        points = 4;
+        message = `Loner sweep! ${callerTeam === 'NS' ? 'Your team' : 'Opponents'} +4.`;
+      } else if (callerTricks === 5) {
+        scoringTeam = callerTeam;
+        points = 2;
+        message = `Sweep! ${callerTeam === 'NS' ? 'Your team' : 'Opponents'} +2.`;
+      } else {
+        scoringTeam = callerTeam;
+        points = 1;
+        message = `Made it. ${callerTeam === 'NS' ? 'Your team' : 'Opponents'} +1.`;
+      }
+      this.scores[scoringTeam] += points;
+      this.lastHandResult = { scoringTeam, points, message };
+
+      if (this.scores.NS >= 10 || this.scores.EW >= 10) {
+        this.state = STATE.GAME_OVER;
+      } else {
+        this.state = STATE.HAND_SCORING;
+      }
+    }
+  }
+
+  /* ============================================================
+     UI
+     ============================================================ */
+
+  class EuchreUI {
+    constructor(game) {
+      this.game = game;
+      this.inputEnabled = true;
+      this.aiTimer = null;
+    }
+
+    init() {
+      this.render();
+      this.maybeScheduleAI();
+    }
+
+    /* -------- top-level render -------- */
+
+    render() {
+      this.renderScoreBar();
+      this.renderNorth();
+      this.renderEastWest();
+      this.renderTable();
+      this.renderSouth();
+      this.updateLabels();
+    }
+
+    renderScoreBar() {
+      const g = this.game;
+      document.getElementById('score-ns').textContent = g.scores.NS;
+      document.getElementById('score-ew').textContent = g.scores.EW;
+      const trumpEl = document.getElementById('trump-display');
+      const dealerEl = document.getElementById('dealer-info');
+      if (g.trump) {
+        const colorClass = (g.trump === 'H' || g.trump === 'D') ? 'trump-red' : 'trump-black';
+        trumpEl.innerHTML = `<span class="${colorClass}">Trump: ${SUIT_SYMBOL[g.trump]}</span>`;
+        const callName = g.caller != null ? PLAYER_NAME[g.caller] : '';
+        dealerEl.textContent = `Called by ${callName}${g.isLoner ? ' (alone)' : ''} • Dealer: ${PLAYER_NAME[g.dealer]}`;
+      } else if (g.upcard) {
+        const colorClass = (g.upcardSuit === 'H' || g.upcardSuit === 'D') ? 'trump-red' : 'trump-black';
+        trumpEl.innerHTML = `<span class="${colorClass}">Upcard: ${g.upcard.rank}${SUIT_SYMBOL[g.upcardSuit]}</span>`;
+        dealerEl.textContent = `Dealer: ${PLAYER_NAME[g.dealer]}`;
+      }
+    }
+
+    updateLabels() {
+      const g = this.game;
+      const labels = {
+        0: document.getElementById('south-label'),
+        1: document.getElementById('west-label'),
+        2: document.getElementById('north-label'),
+        3: document.getElementById('east-label'),
+      };
+      const baseNames = { 0: 'You (South)', 1: 'West', 2: 'North (Partner)', 3: 'East' };
+      for (let i = 0; i < 4; i++) {
+        let txt = baseNames[i];
+        if (i === g.dealer) txt += ' <span class="dealer-mark">Dealer</span>';
+        labels[i].innerHTML = txt;
+        labels[i].classList.toggle('is-current',
+          (g.state === STATE.PLAYING || g.state === STATE.BIDDING_R1 || g.state === STATE.BIDDING_R2 || g.state === STATE.DEALER_DISCARD)
+          && g.currentPlayer === i);
+      }
+    }
+
+    renderNorth() {
+      const el = document.getElementById('north-hand');
+      const count = this.game.hands[2].length;
+      el.innerHTML = '';
+      for (let i = 0; i < count; i++) {
+        const c = document.createElement('div');
+        c.className = 'card face-down side';
+        el.appendChild(c);
+      }
+    }
+
+    renderEastWest() {
+      for (const [pIdx, id] of [[1, 'west-hand'], [3, 'east-hand']]) {
+        const el = document.getElementById(id);
+        const count = this.game.hands[pIdx].length;
+        el.innerHTML = '';
+        // Hide the loner partner's hand
+        if (this.game.isLoner && pIdx === this.game.lonerPartner) continue;
+        for (let i = 0; i < count; i++) {
+          const c = document.createElement('div');
+          c.className = 'card face-down lateral';
+          el.appendChild(c);
+        }
+      }
+    }
+
+    renderTable() {
+      const g = this.game;
+      const el = document.getElementById('table-area');
+      el.innerHTML = '';
+
+      // Status + optional hint
+      const status = document.createElement('div');
+      status.id = 'status-msg';
+      status.textContent = this._statusText();
+      el.appendChild(status);
+      const hintText = this._hintText();
+      if (hintText) {
+        const hint = document.createElement('div');
+        hint.className = 'hint-msg';
+        hint.innerHTML = hintText;
+        el.appendChild(hint);
+      }
+
+      // Upcard display during bidding
+      if ((g.state === STATE.BIDDING_R1 || g.state === STATE.BIDDING_R2) && g.upcard) {
+        const wrap = document.createElement('div');
+        wrap.className = 'upcard-area';
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = g.upcard.faceHTML();
+        if (g.state === STATE.BIDDING_R2) card.style.opacity = '0.5';
+        wrap.appendChild(card);
+        const lbl = document.createElement('div');
+        lbl.className = 'upcard-label';
+        lbl.textContent = g.state === STATE.BIDDING_R1 ? 'Upcard' : 'Turned Down';
+        wrap.appendChild(lbl);
+        el.appendChild(wrap);
+      }
+
+      // Trick area (during play and trick end)
+      if (g.state === STATE.PLAYING || g.state === STATE.TRICK_END) {
+        const trick = g.state === STATE.TRICK_END ? g.lastTrick : g.currentTrick;
+        if (trick && trick.length > 0) {
+          const wrap = document.createElement('div');
+          wrap.className = 'trick-display';
+          const positions = { 0: 'south', 1: 'west', 2: 'north', 3: 'east' };
+          for (const play of trick) {
+            const c = document.createElement('div');
+            c.className = `card trick-card trick-${positions[play.playerIndex]}`;
+            c.innerHTML = play.card.faceHTML();
+            wrap.appendChild(c);
+          }
+          el.appendChild(wrap);
+        }
+        const tc = document.createElement('div');
+        tc.className = 'trick-count';
+        tc.innerHTML = `<span class="you-tricks">Us: ${g.tricksWon.NS}</span> &nbsp;|&nbsp; Them: ${g.tricksWon.EW}`;
+        el.appendChild(tc);
+      }
+
+      // Next-hand / new-game buttons
+      if (g.state === STATE.HAND_SCORING) {
+        const btn = document.createElement('button');
+        btn.className = 'action-btn';
+        btn.textContent = 'Next Hand';
+        btn.onclick = () => {
+          g.nextHand();
+          this.render();
+          this.maybeScheduleAI();
+        };
+        el.appendChild(btn);
+      }
+      if (g.state === STATE.GAME_OVER) {
+        const btn = document.createElement('button');
+        btn.className = 'action-btn';
+        btn.textContent = 'New Game';
+        btn.onclick = () => {
+          g.fullReset();
+          this.render();
+          this.maybeScheduleAI();
+        };
+        el.appendChild(btn);
+      }
+    }
+
+    _statusText() {
+      const g = this.game;
+      switch (g.state) {
+        case STATE.BIDDING_R1: return g.currentPlayer === 0 ? 'Bid Round 1 — your move' : `${PLAYER_NAME[g.currentPlayer]} is bidding…`;
+        case STATE.BIDDING_R2: return g.currentPlayer === 0 ? (g.dealer === 0 ? 'Bid Round 2 — you are stuck' : 'Bid Round 2 — your move') : `${PLAYER_NAME[g.currentPlayer]} is bidding…`;
+        case STATE.DEALER_DISCARD: return 'Pick a card to discard';
+        case STATE.PLAYING:
+          if (g.currentPlayer === 0) return 'Your turn';
+          return `${PLAYER_NAME[g.currentPlayer]} thinking…`;
+        case STATE.TRICK_END:
+          return `${PLAYER_NAME[g.lastTrickWinner]} won the trick`;
+        case STATE.HAND_SCORING:
+          return g.lastHandResult ? g.lastHandResult.message : '';
+        case STATE.GAME_OVER:
+          return g.scores.NS >= 10 ? '🏆 You and partner win the game!' : 'Opponents win the game.';
+        default: return '';
+      }
+    }
+
+    _hintText() {
+      const g = this.game;
+      if (g.currentPlayer !== 0) return '';
+      const colorClass = (g.upcardSuit === 'H' || g.upcardSuit === 'D') ? 'trump-red' : 'trump-black';
+      const upSym = `<span class="${colorClass}">${SUIT_SYMBOL[g.upcardSuit]}</span>`;
+      switch (g.state) {
+        case STATE.BIDDING_R1:
+          if (g.dealer === 0) return `As dealer, you can <b>Pick Up</b> the ${upSym} (it becomes trump and you discard a card), or <b>Pass</b>.`;
+          if (g.dealer === 2) return `Telling your partner (the dealer) to <b>Order ${upSym}</b> means they pick up the upcard. Or pass.`;
+          return `Tell the dealer to <b>Order ${upSym}</b> (it becomes trump), or <b>Pass</b>. Tick "Go alone" to play without your partner for a 4-point loner.`;
+        case STATE.BIDDING_R2:
+          if (g.dealer === 0) return `Everyone passed in round 1, so you (dealer) <b>must call a suit</b> — anything except the turned-down ${upSym}.`;
+          return `Round 1 is over. Call any suit other than ${upSym}, or pass to the dealer.`;
+        case STATE.DEALER_DISCARD:
+          return `The upcard is now in your hand. Click any card to discard it (typically the lowest non-trump).`;
+        case STATE.PLAYING:
+          if (g.currentTrick.length === 0) return `You're leading. Click a card to play.`;
+          return `Click a card to play. You must follow suit if you can.`;
+        default: return '';
+      }
+    }
+
+    renderSouth() {
+      const g = this.game;
+      const handEl = document.getElementById('south-hand');
+      const ctlEl  = document.getElementById('south-controls');
+      handEl.innerHTML = '';
+      ctlEl.innerHTML = '';
+
+      const hand = g.hands[0];
+      // If South is loner partner, hand is sat out
+      const isSittingOut = g.isLoner && g.lonerPartner === 0;
+
+      // Build cards
+      let legalIds = new Set();
+      let mode = 'idle';
+      if (g.state === STATE.PLAYING && g.currentPlayer === 0 && this.inputEnabled && !isSittingOut) {
+        mode = 'play';
+        const legal = EuchreRules.legalPlays(hand, g.ledSuit, g.trump);
+        legalIds = new Set(legal.map(c => c.id));
+      } else if (g.state === STATE.DEALER_DISCARD && g.currentPlayer === 0 && this.inputEnabled) {
+        mode = 'discard';
+      }
+
+      for (const card of hand) {
+        const div = document.createElement('div');
+        let cls = 'card';
+        if (mode === 'play') cls += legalIds.has(card.id) ? ' playable' : ' not-legal';
+        else if (mode === 'discard') cls += ' playable discard-card';
+        div.className = cls;
+        div.innerHTML = card.faceHTML();
+        div.dataset.id = card.id;
+        div.title = card.label();
+        if (mode === 'play' && legalIds.has(card.id)) {
+          div.addEventListener('click', () => this.onCardClick(card));
+        } else if (mode === 'discard') {
+          div.addEventListener('click', () => this.onDiscardClick(card));
+        }
+        handEl.appendChild(div);
+      }
+
+      // Controls
+      if (g.state === STATE.BIDDING_R1 && g.currentPlayer === 0) {
+        this._renderBidR1Controls(ctlEl);
+      } else if (g.state === STATE.BIDDING_R2 && g.currentPlayer === 0) {
+        this._renderBidR2Controls(ctlEl);
+      } else if (g.state === STATE.DEALER_DISCARD) {
+        const p = document.createElement('div');
+        p.className = 'discard-prompt';
+        p.textContent = 'Click any card to discard';
+        ctlEl.appendChild(p);
+      }
+    }
+
+    _renderStrengthMeter(ctlEl, suitsToScore, headerText) {
+      const g = this.game;
+      const meter = document.createElement('div');
+      meter.className = 'strength-meter';
+
+      const header = document.createElement('div');
+      header.className = 'strength-header';
+      header.textContent = headerText;
+      meter.appendChild(header);
+
+      for (const { suit, isDealerBonus } of suitsToScore) {
+        const score = EuchreRules.evaluateHandForTrump(
+          g.hands[0], suit, isDealerBonus, isDealerBonus ? g.upcardSuit : null
+        );
+        const bucket = strengthBucket(score);
+
+        const row = document.createElement('div');
+        row.className = 'strength-row';
+
+        const sEl = document.createElement('span');
+        sEl.className = 'strength-suit ' + ((suit === 'H' || suit === 'D') ? 'red' : 'black');
+        sEl.textContent = SUIT_SYMBOL[suit];
+        row.appendChild(sEl);
+
+        const bar = document.createElement('div');
+        bar.className = 'strength-bar';
+        const fill = document.createElement('div');
+        fill.className = 'strength-fill';
+        fill.style.width = strengthPct(score) + '%';
+        fill.style.background = bucket.color;
+        bar.appendChild(fill);
+        // Threshold marks
+        const tCall = document.createElement('div');
+        tCall.className = 'threshold-mark t-call';
+        tCall.title = 'Call threshold (5)';
+        bar.appendChild(tCall);
+        const tLoner = document.createElement('div');
+        tLoner.className = 'threshold-mark t-loner';
+        tLoner.title = 'Loner threshold (9)';
+        bar.appendChild(tLoner);
+        row.appendChild(bar);
+
+        const lbl = document.createElement('span');
+        lbl.className = 'strength-label';
+        lbl.textContent = `${score.toFixed(1)} · ${bucket.label}`;
+        row.appendChild(lbl);
+
+        meter.appendChild(row);
+      }
+
+      const legend = document.createElement('div');
+      legend.className = 'strength-legend';
+      legend.innerHTML = 'Right bower +4 · Left bower +3 · Other trump +1 · Off-suit ace +0.5 · Dealer +1 if upcard suit';
+      meter.appendChild(legend);
+
+      ctlEl.appendChild(meter);
+    }
+
+    _renderBidR1Controls(ctlEl) {
+      const g = this.game;
+      this._renderStrengthMeter(
+        ctlEl,
+        [{ suit: g.upcardSuit, isDealerBonus: g.dealer === 0 }],
+        `Hand strength if ${SUIT_NAME[g.upcardSuit]} is trump`
+      );
+
+      const aloneLbl = document.createElement('label');
+      aloneLbl.className = 'alone-label';
+      aloneLbl.innerHTML = `<input type="checkbox" id="alone-r1" /> Go alone`;
+      ctlEl.appendChild(aloneLbl);
+
+      const order = document.createElement('button');
+      order.className = 'bid-btn primary';
+      const colorClass = (g.upcardSuit === 'H' || g.upcardSuit === 'D') ? 'suit-red' : '';
+      const target = g.dealer === 0 ? 'Pick Up' : (g.dealer === 2 ? 'Order Partner' : 'Order Dealer');
+      order.innerHTML = `${target} <span class="${colorClass}">${SUIT_SYMBOL[g.upcardSuit]}</span>`;
+      order.onclick = () => this.onBid('ORDER_UP', !!document.getElementById('alone-r1').checked);
+      ctlEl.appendChild(order);
+
+      const pass = document.createElement('button');
+      pass.className = 'bid-btn';
+      pass.textContent = 'Pass';
+      pass.onclick = () => this.onBid('PASS', false);
+      ctlEl.appendChild(pass);
+    }
+
+    _renderBidR2Controls(ctlEl) {
+      const g = this.game;
+      const stuck = g.dealer === 0;
+      const candidates = SUITS.filter(s => s !== g.upcardSuit).map(s => ({ suit: s, isDealerBonus: false }));
+      this._renderStrengthMeter(ctlEl, candidates, 'Hand strength by suit');
+
+      const aloneLbl = document.createElement('label');
+      aloneLbl.className = 'alone-label';
+      aloneLbl.innerHTML = `<input type="checkbox" id="alone-r2" /> Go alone`;
+      ctlEl.appendChild(aloneLbl);
+
+      for (const s of SUITS) {
+        if (s === g.upcardSuit) continue;
+        const btn = document.createElement('button');
+        btn.className = 'bid-btn' + ((s === 'H' || s === 'D') ? ' suit-red' : '');
+        btn.innerHTML = `Call ${SUIT_SYMBOL[s]}`;
+        btn.onclick = () => this.onBid('CALL_SUIT', !!document.getElementById('alone-r2').checked, s);
+        ctlEl.appendChild(btn);
+      }
+
+      const pass = document.createElement('button');
+      pass.className = 'bid-btn';
+      pass.textContent = 'Pass';
+      pass.disabled = stuck;
+      pass.title = stuck ? 'Dealer is stuck — must call' : '';
+      pass.onclick = () => this.onBid('PASS', false);
+      ctlEl.appendChild(pass);
+    }
+
+    /* -------- input handlers -------- */
+
+    onBid(action, alone, suit) {
+      if (!this.inputEnabled) return;
+      const g = this.game;
+      const handBefore = [...g.hands[0]];
+      let coach = null;
+      if (g.state === STATE.BIDDING_R1) {
+        coach = EuchreCoach.evalBidR1(handBefore, g.upcardSuit, action, alone, 0, g.dealer, g.scores);
+      } else if (g.state === STATE.BIDDING_R2) {
+        coach = EuchreCoach.evalBidR2(handBefore, suit || null, action, alone, g.upcardSuit, 0, g.dealer);
+      }
+      if (!coach && (action === 'ORDER_UP' || action === 'CALL_SUIT')) {
+        const trump = action === 'ORDER_UP' ? g.upcardSuit : suit;
+        coach = EuchreCoach.evalGoAlone(handBefore, trump, alone);
+      }
+
+      const res = g.processBid(0, action, alone, suit);
+      if (res.error) return;
+      this.render();
+      if (coach) this._showCoach(coach, () => this.maybeScheduleAI());
+      else this.maybeScheduleAI();
+    }
+
+    onCardClick(card) {
+      if (!this.inputEnabled) return;
+      const g = this.game;
+      const res = g.playCard(0, card);
+      if (res.error) return;
+      this.render();
+      if (res.coachResult) {
+        this._showCoach(res.coachResult, () => this._afterPlayContinue());
+      } else {
+        this._afterPlayContinue();
+      }
+    }
+
+    onDiscardClick(card) {
+      if (!this.inputEnabled) return;
+      const res = this.game.dealerDiscard(card);
+      if (res.error) return;
+      this.render();
+      this.maybeScheduleAI();
+    }
+
+    _afterPlayContinue() {
+      const g = this.game;
+      if (g.state === STATE.TRICK_END) {
+        // Show trick for ~1.4s, then advance
+        this.disableInput();
+        setTimeout(() => {
+          g.advanceAfterTrick();
+          this.enableInput();
+          this.render();
+          this.maybeScheduleAI();
+        }, 1400);
+      } else {
+        this.maybeScheduleAI();
+      }
+    }
+
+    /* -------- AI scheduling -------- */
+
+    maybeScheduleAI() {
+      const g = this.game;
+      clearTimeout(this.aiTimer);
+      if (!this.inputEnabled) return;
+      if (g.state === STATE.GAME_OVER || g.state === STATE.HAND_SCORING) return;
+      if (g.state === STATE.DEALER_DISCARD) return; // human dealer only
+      if (g.currentPlayer === 0) return;
+
+      let delay = 700;
+      if (g.state === STATE.BIDDING_R1 || g.state === STATE.BIDDING_R2) delay = 450;
+
+      this.aiTimer = setTimeout(() => this.executeAI(), delay);
+    }
+
+    executeAI() {
+      const g = this.game;
+
+      if (g.state === STATE.BIDDING_R1) {
+        const p = g.currentPlayer;
+        const bid = EuchreAI.decideBidR1(g.hands[p], g.upcardSuit, p, g.dealer, g.scores);
+        g.processBid(p, bid.action, bid.alone);
+        this.render();
+        this.maybeScheduleAI();
+        return;
+      }
+      if (g.state === STATE.BIDDING_R2) {
+        const p = g.currentPlayer;
+        const bid = EuchreAI.decideBidR2(g.hands[p], g.upcardSuit, p, g.dealer, g.scores);
+        g.processBid(p, bid.action, bid.alone, bid.suit);
+        this.render();
+        this.maybeScheduleAI();
+        return;
+      }
+      if (g.state === STATE.PLAYING) {
+        const p = g.currentPlayer;
+        const card = EuchreAI.choosePlay(
+          g.hands[p], g.currentTrick, g.ledSuit, g.trump, p, g.tricksWon, g.callerTeam
+        );
+        g.playCard(p, card);
+        this.render();
+        if (g.state === STATE.TRICK_END) {
+          this.disableInput();
+          setTimeout(() => {
+            g.advanceAfterTrick();
+            this.enableInput();
+            this.render();
+            this.maybeScheduleAI();
+          }, 1400);
+        } else {
+          this.maybeScheduleAI();
+        }
+        return;
+      }
+    }
+
+    /* -------- coach panel -------- */
+
+    _showCoach(tip, callback) {
+      this.disableInput();
+      const panel = document.getElementById('coach-panel');
+      const title = document.getElementById('coach-title');
+      const msg   = document.getElementById('coach-message');
+      const btn   = document.getElementById('coach-continue');
+
+      title.textContent = tip.title;
+      msg.textContent = tip.message;
+      panel.classList.remove('severity-warning', 'severity-danger', 'severity-info');
+      panel.classList.add(`severity-${tip.severity || 'info'}`);
+      panel.classList.add('visible');
+
+      const dismiss = () => {
+        panel.classList.remove('visible');
+        btn.removeEventListener('click', dismiss);
+        this.enableInput();
+        if (callback) callback();
+      };
+      btn.addEventListener('click', dismiss);
+    }
+
+    disableInput() { this.inputEnabled = false; }
+    enableInput()  { this.inputEnabled = true; }
+  }
+
+  /* ============================================================
+     BOOTSTRAP
+     ============================================================ */
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const game = new EuchreGame();
+    const ui = new EuchreUI(game);
+    ui.init();
+    window.__euchre = { game, ui };
+  });
+  </script>
+</body>
+</html>
